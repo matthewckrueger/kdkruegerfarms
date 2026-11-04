@@ -20,6 +20,13 @@ someone says **"I'll take it."**
 5. **Due-time alerts.** The driver gets a reminder 30 minutes before the job is due. If the job isn't done by
    the due time, everyone involved gets an **Overdue** alert.
 
+**Pickup and drop-off pins.** Each job can have a **Pick up at** spot and a **Drop off at** spot.
+For each one, the dispatcher can type a name and drop an exact pin on a map. To place the pin, they can search an address,
+paste a Google Maps link, tap 🎯 Use my location, or tap the map (🛰 Satellite view helps for field gates and bins).
+Drivers get a **🧭 Directions** button for each spot. It opens Apple Maps on iPhone and Google Maps on Android, with a button for the other app too.
+Spots you use a lot (NAPA, the co-op, the shop) can be saved as one-tap buttons. The last drop-off is filled in automatically.
+Manage saved places under **Settings**.
+
 Every driver on the **Team** list is always in the rotation. There's no on/off switch.
 To stop someone getting pinged, remove them from the Team list. A driver who can't go
 just taps **Can't** and the job moves to the next person. If you add a new driver while a job is sitting

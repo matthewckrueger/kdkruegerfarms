@@ -11,6 +11,7 @@ const DB_FILE = path.join(DATA_DIR, 'db.json');
 const DEFAULTS = {
   users: [],
   jobs: [],
+  places: [], // saved map pins: { id, name, lat, lng }
   settings: {
     offerMinutes: 3, // how long a driver has to answer a normal job
     urgentOfferMinutes: 1, // ...and an urgent one

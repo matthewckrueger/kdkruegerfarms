@@ -53,6 +53,8 @@ app.set('trust proxy', 1);
 app.get('/healthz', (req, res) => res.send('ok'));
 app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
+// Map library, served from our own server instead of a CDN.
+app.use('/vendor/leaflet', express.static(path.join(__dirname, 'node_modules', 'leaflet', 'dist'), { maxAge: '7d' }));
 
 const publicUser = (u, full) => ({
   id: u.id, name: u.name, role: u.role, order: u.order,
@@ -171,9 +173,11 @@ app.get('/api/state', h((req) => {
     me: publicUser(me, true),
     serverTime: new Date().toISOString(),
     settings: db.settings,
+    places: isDispatcher ? db.places : [],
     users: db.users.map((u) => publicUser(u, isDispatcher)).sort((a, b) => a.order - b.order),
     jobs: jobs.map((j) => ({
-      id: j.id, title: j.title, details: j.details, location: j.location, dueBy: j.dueBy,
+      id: j.id, title: j.title, details: j.details, location: j.location, lat: j.lat ?? null, lng: j.lng ?? null,
+      dropoff: j.dropoff || '', dropLat: j.dropLat ?? null, dropLng: j.dropLng ?? null, dueBy: j.dueBy,
       priority: j.priority, status: j.status, createdAt: j.createdAt,
       createdBy: names[j.createdBy] || '',
       assignedTo: j.assignedTo, assignedName: names[j.assignedTo] || '',
@@ -270,6 +274,65 @@ app.post('/api/users/order', dispatcherOnly, h((req) => {
   });
   store.save();
 }));
+
+// ---- Map pins ------------------------------------------------------------
+app.post('/api/places', dispatcherOnly, h((req) => {
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  const pin = dispatch.cleanPin(req.body.lat, req.body.lng);
+  if (!name) throw new Error('Give the place a name.');
+  if (pin.lat == null) throw new Error('Drop a pin on the map first.');
+  db.places = db.places.filter((p) => p.name.toLowerCase() !== name.toLowerCase());
+  db.places.push({ id: store.id(), name, ...pin });
+  db.places.sort((a, b) => a.name.localeCompare(b.name));
+  store.save();
+}));
+app.delete('/api/places/:id', dispatcherOnly, h((req) => {
+  db.places = db.places.filter((p) => p.id !== req.params.id);
+  store.save();
+}));
+
+const { coordsFromUrl, SHORT_LINK } = require('./lib/maps');
+
+// Address search (OpenStreetMap), or a pasted Google/Apple Maps link.
+app.get('/api/geocode', dispatcherOnly, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().slice(0, 500);
+    if (!q) return res.json([]);
+    if (SHORT_LINK.test(q)) {
+      let url = q;
+      let pin = coordsFromUrl(url);
+      // Short share links redirect to the full URL; follow a few hops (Google/Apple hosts only).
+      for (let i = 0; !pin && i < 4; i++) {
+        const r = await fetch(url, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 KDKF-Pickups' } });
+        const next = r.headers.get('location');
+        if (!next) break;
+        url = new URL(next, url).toString();
+        if (!/^https:\/\/([a-z0-9-]+\.)*(google\.com|goo\.gl|apple\.com)\//i.test(url)) break;
+        pin = coordsFromUrl(url);
+      }
+      if (!pin || pin.lat == null) throw new Error("Couldn't read a location from that link. Try searching the address instead.");
+      return res.json([{ name: 'Pin from link', address: `${pin.lat}, ${pin.lng}`, ...pin }]);
+    }
+    const u = new URL('https://nominatim.openstreetmap.org/search');
+    u.searchParams.set('format', 'jsonv2');
+    u.searchParams.set('q', q);
+    u.searchParams.set('limit', '6');
+    u.searchParams.set('countrycodes', 'us');
+    if (/^[-\d.,]+$/.test(String(req.query.viewbox || ''))) u.searchParams.set('viewbox', req.query.viewbox);
+    const r = await fetch(u, {
+      headers: { 'User-Agent': `KDKF-Pickups/1.0 (${process.env.CONTACT_EMAIL || 'farm dispatch app'})`, 'Accept-Language': 'en' },
+    });
+    if (!r.ok) throw new Error('Map search is busy. Try again in a moment.');
+    const out = await r.json();
+    res.json(out.map((x) => ({
+      name: x.name || String(x.display_name).split(',')[0],
+      address: x.display_name,
+      ...dispatch.cleanPin(x.lat, x.lon),
+    })));
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'Search failed.' });
+  }
+});
 
 app.put('/api/settings', dispatcherOnly, h((req) => {
   const s = db.settings;

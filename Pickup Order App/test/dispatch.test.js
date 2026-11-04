@@ -94,3 +94,18 @@ test('due-time reminder and overdue alert', () => {
   dispatch.setProgress(job, 'amy', 'done');
   assert.equal(job.status, 'done');
 });
+
+test('map pins are kept on the job, bad ones dropped', () => {
+  setup();
+  const job = dispatch.createJob({ title: 'Seed', location: 'Co-op', lat: '44.3123456', lng: -96.7987654 }, 'boss');
+  assert.equal(job.lat, 44.312346);
+  assert.equal(job.lng, -96.798765);
+  const bad = dispatch.createJob({ title: 'X', lat: 200, lng: 5 }, 'boss');
+  assert.equal(bad.lat, null);
+  const two = dispatch.createJob({ title: 'Z', location: 'NAPA', lat: 44, lng: -96, dropoff: 'Shop', dropLat: 44.5, dropLng: -96.5 }, 'boss');
+  assert.equal(two.dropoff, 'Shop');
+  assert.equal(two.dropLat, 44.5);
+  assert.match(sent.find((x) => x.kind === 'offer' && x.jobId === two.id).body, /NAPA → Shop/);
+  const none = dispatch.createJob({ title: 'Y', lat: null, lng: null }, 'boss');
+  assert.equal(none.lat, null);
+});

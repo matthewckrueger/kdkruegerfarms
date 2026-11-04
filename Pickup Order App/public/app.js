@@ -224,9 +224,28 @@
       ${mine.length ? mine.map(myJobCard).join('') : `<p class="muted">No jobs right now.</p>`}
       ${done.length ? `<h2>Recently done</h2>${done.map((j) => `<div class="card"><div class="row"><span class="grow">${esc(j.title)}</span><span class="pill done">Done</span></div></div>`).join('')}` : ''}`;
   }
+  // Directions: Apple Maps on iPhone, Google Maps elsewhere, plus a link to the other one.
+  function directions(name, lat, lng) {
+    const pinned = lat != null && lng != null;
+    if (!pinned && !name) return '';
+    const dest = pinned ? `${lat},${lng}` : name;
+    const google = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
+    const apple = `https://maps.apple.com/?daddr=${encodeURIComponent(dest)}${pinned && name ? '&q=' + encodeURIComponent(name) : ''}`;
+    const [main, other, otherName] = isIOS ? [apple, google, 'Google Maps'] : [google, apple, 'Apple Maps'];
+    return `<div class="actions" style="margin-top:6px">
+      <a class="btn small" href="${esc(main)}" target="_blank" rel="noopener">🧭 Directions</a>
+      <a class="btn light small" href="${esc(other)}" target="_blank" rel="noopener">${otherName}</a></div>`;
+  }
+  function stop(icon, label, name, lat, lng) {
+    const pinned = lat != null && lng != null;
+    if (!name && !pinned) return '';
+    return `<div class="stop-row"><div class="meta">${icon} ${label}: <b>${esc(name || 'Map pin')}</b>${pinned ? ' <span class="pinned">· pinned</span>' : ''}</div>
+      ${directions(name, lat, lng)}</div>`;
+  }
   function jobInfo(j) {
     return `
-      ${j.location ? `<div class="meta">📍 <b>${esc(j.location)}</b></div>` : ''}
+      ${stop('📍', 'Pick up', j.location, j.lat, j.lng)}
+      ${stop('🏁', 'Drop off', j.dropoff, j.dropLat, j.dropLng)}
       ${j.dueBy ? `<div class="meta">⏰ Due <b>${esc(when(j.dueBy))}</b> (${esc(untilText(j.dueBy))})</div>` : ''}
       ${j.details ? `<p class="details">${esc(j.details)}</p>` : ''}`;
   }
@@ -315,8 +334,8 @@
       <form class="card stack" id="jobForm">
         <div><label for="jTitle">What needs to be done?</label>
           <input id="jTitle" required maxlength="120" placeholder="e.g. Pick up hydraulic hose at NAPA"></div>
-        <div><label for="jLoc">Where? <span class="muted">(optional)</span></label>
-          <input id="jLoc" maxlength="300" placeholder="e.g. NAPA Auto Parts, Main St"></div>
+        ${whereField('pu', '📍 Pick up at', 'e.g. NAPA Auto Parts, Main St')}
+        ${whereField('do', '🏁 Drop off at', 'e.g. Shop, Grain bins, North pivot')}
         <div><label for="jDue">Needs to be done by</label>
           <input id="jDue" type="datetime-local">
           <div class="chips">${quick.map(([l, d], i) => `<button type="button" class="chip" data-q="${i}">${l}</button>`).join('')}</div></div>
@@ -333,19 +352,181 @@
         $$('[data-q]').forEach((x) => x.classList.toggle('on', x === b));
       };
     });
+    const pu = pinPicker('pu');
+    const dropoff = pinPicker('do');
+    // Most jobs come back to the same spot - start with the last drop-off.
+    try {
+      const last = JSON.parse(localStorage.getItem('kdk-last-drop'));
+      if (last?.name) dropoff.fill(last.name, last.lat, last.lng);
+    } catch {}
     $('#jobForm').onsubmit = async (e) => {
       e.preventDefault();
       const due = $('#jDue').value;
+      const a = pu.get();
+      const d = dropoff.get();
       try {
+        for (const x of [a, d]) {
+          if (!x.save) continue;
+          if (!x.name) throw new Error('Type a name for the spot you want to save.');
+          await api('places', { body: { name: x.name, lat: x.lat, lng: x.lng } });
+        }
         await api('jobs', { body: {
-          title: $('#jTitle').value, location: $('#jLoc').value, details: $('#jDetails').value,
+          title: $('#jTitle').value, details: $('#jDetails').value,
+          location: a.name, lat: a.lat, lng: a.lng,
+          dropoff: d.name, dropLat: d.lat, dropLng: d.lng,
           dueBy: due ? new Date(due).toISOString() : null, priority: $('#jUrgent').checked ? 'urgent' : 'normal',
         } });
+        try { localStorage.setItem('kdk-last-drop', JSON.stringify(d)); } catch {}
         toast('Sent! Pinging the first driver.');
         tab = 'jobs';
         await refresh(true);
         render();
       } catch (err) { toast(err.message); }
+    };
+  }
+
+  // One "where" field: name box, saved-place chips, and a pop-open map to drop a pin.
+  function whereField(k, label, placeholder) {
+    return `<div><label for="${k}Loc">${label} <span class="muted">(optional)</span></label>
+      ${state.places.length ? `<div class="chips" style="margin:0 0 8px">${state.places.map((p) => `<button type="button" class="chip" data-place-${k}="${esc(p.id)}">📍 ${esc(p.name)}</button>`).join('')}</div>` : ''}
+      <input id="${k}Loc" maxlength="300" placeholder="${esc(placeholder)}">
+      <div class="row" style="margin-top:8px"><span id="${k}Status" class="grow small muted">No map pin yet</span>
+        <button type="button" class="small light" id="${k}Clear" hidden>Remove pin</button>
+        <button type="button" class="small" id="${k}Toggle">📍 Drop a pin</button></div>
+      <div id="${k}Panel" class="stack" style="margin-top:8px" hidden>
+        <div class="row"><input id="${k}Search" style="flex:1;min-width:0" placeholder="Address, business, or paste a Google Maps link" enterkeyhint="search">
+          <button type="button" class="small" id="${k}SearchBtn">Search</button></div>
+        <div id="${k}Results" class="results"></div>
+        <div id="${k}Map" class="map"></div>
+        <div class="row"><button type="button" class="small light" id="${k}Here">🎯 Use my location</button>
+          <button type="button" class="small light" id="${k}Layer">🛰 Satellite</button></div>
+        <p class="muted small" style="margin:0">Tap the map to drop the pin. Drag it to fine-tune.</p>
+        <label class="row" style="font-weight:500"><input type="checkbox" id="${k}Save"> Save this spot for next time</label>
+      </div></div>`;
+  }
+
+  // Map pin picker (Leaflet + OpenStreetMap) for one whereField.
+  // get() -> { name, lat, lng, save }   fill(name, lat, lng) prefills it.
+  function pinPicker(k) {
+    const el = (id) => $('#' + k + id);
+    let pin = null;
+    let map = null;
+    let marker = null;
+    let satellite = false;
+    let street, sat;
+    if (!window.L) el('Toggle').hidden = true;
+
+    function show() {
+      el('Status').innerHTML = pin
+        ? `<span class="pinned">📍 Pinned</span> <span class="muted">${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}</span>`
+        : 'No map pin yet';
+      el('Clear').hidden = !pin;
+    }
+    function setPin(lat, lng, zoom) {
+      pin = { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 };
+      try { localStorage.setItem('kdk-map-center', JSON.stringify(pin)); } catch {}
+      if (map) {
+        if (!marker) {
+          marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+          marker.on('dragend', () => { const p = marker.getLatLng(); setPin(p.lat, p.lng); });
+        } else marker.setLatLng([lat, lng]);
+        if (zoom) map.setView([lat, lng], zoom);
+      }
+      show();
+    }
+    function clearPin() {
+      pin = null;
+      if (marker) { marker.remove(); marker = null; }
+      show();
+    }
+    function startCenter() {
+      try { const c = JSON.parse(localStorage.getItem('kdk-map-center')); if (c?.lat != null) return [[c.lat, c.lng], 13]; } catch {}
+      if (state.places[0]) return [[state.places[0].lat, state.places[0].lng], 12];
+      return [[39.8, -98.6], 4]; // middle of the US
+    }
+    function openMap() {
+      el('Panel').hidden = false;
+      el('Toggle').textContent = 'Hide map';
+      if (!map) {
+        const [center, zoom] = pin ? [[pin.lat, pin.lng], 16] : startCenter();
+        map = L.map(k + 'Map').setView(center, zoom);
+        street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19, attribution: '&copy; OpenStreetMap contributors',
+        }).addTo(map);
+        sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 19, attribution: 'Imagery &copy; Esri',
+        });
+        map.on('click', (e) => setPin(e.latlng.lat, e.latlng.lng));
+        if (pin) setPin(pin.lat, pin.lng);
+      }
+      setTimeout(() => map.invalidateSize(), 50);
+    }
+    el('Toggle').onclick = () => {
+      if (el('Panel').hidden) openMap();
+      else { el('Panel').hidden = true; el('Toggle').textContent = '📍 Drop a pin'; }
+    };
+    el('Clear').onclick = clearPin;
+    el('Layer').onclick = () => {
+      satellite = !satellite;
+      if (satellite) { map.removeLayer(street); sat.addTo(map); } else { map.removeLayer(sat); street.addTo(map); }
+      el('Layer').textContent = satellite ? '🗺 Map' : '🛰 Satellite';
+    };
+    el('Here').onclick = () => {
+      if (!navigator.geolocation) return toast("This phone can't share its location.");
+      toast('Finding you…');
+      navigator.geolocation.getCurrentPosition(
+        (p) => setPin(p.coords.latitude, p.coords.longitude, 17),
+        () => toast('Location is off. Allow it in your phone settings.'),
+        { enableHighAccuracy: true, timeout: 15000 },
+      );
+    };
+    async function search() {
+      const q = el('Search').value.trim();
+      if (!q) return;
+      // Typed coordinates like "44.31, -96.79"
+      const m = q.match(/^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/);
+      if (m) { setPin(+m[1], +m[2], 17); return; }
+      const box = el('Results');
+      box.innerHTML = '<span class="muted small">Searching…</span>';
+      try {
+        const b = map.getBounds();
+        const viewbox = [b.getWest(), b.getNorth(), b.getEast(), b.getSouth()].map((n) => n.toFixed(4)).join(',');
+        const results = (await api(`geocode?q=${encodeURIComponent(q)}&viewbox=${viewbox}`)).filter((r) => r.lat != null);
+        if (!results.length) { box.innerHTML = '<span class="muted small">Nothing found. Try a nearby town or road, then tap the map.</span>'; return; }
+        box.innerHTML = results.map((r, i) => `<button type="button" data-r="${i}">${esc(r.name)}<small>${esc(r.address)}</small></button>`).join('');
+        $$('[data-r]', box).forEach((btn) => {
+          btn.onclick = () => {
+            const r = results[btn.dataset.r];
+            setPin(r.lat, r.lng, 17);
+            if (!el('Loc').value.trim() && r.name !== 'Pin from link') el('Loc').value = r.name;
+            box.innerHTML = '';
+          };
+        });
+      } catch (err) { box.innerHTML = `<span class="muted small">${esc(err.message)}</span>`; }
+    }
+    el('SearchBtn').onclick = search;
+    el('Search').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); search(); } };
+    const chips = $$(`[data-place-${k}]`);
+    chips.forEach((b) => {
+      b.onclick = () => {
+        const p = state.places.find((x) => x.id === b.getAttribute(`data-place-${k}`));
+        el('Loc').value = p.name;
+        setPin(p.lat, p.lng, 16);
+        el('Save').checked = false;
+        chips.forEach((x) => x.classList.toggle('on', x === b));
+      };
+    });
+    return {
+      get: () => ({
+        name: el('Loc').value.trim(),
+        lat: pin?.lat ?? null,
+        lng: pin?.lng ?? null,
+        save: !!(pin && el('Save').checked),
+      }),
+      fill(name, lat, lng) {
+        el('Loc').value = name || '';
+        if (lat != null && lng != null) setPin(lat, lng); else clearPin();
+      },
     };
   }
 
@@ -406,7 +587,14 @@
         <div><label for="sUrgent">…for an urgent job</label><input id="sUrgent" type="number" min="0.5" max="240" step="0.5" value="${s.urgentOfferMinutes}"></div>
         <div><label for="sRem">Remind the driver this many minutes before it's due</label><input id="sRem" type="number" min="1" max="240" value="${s.reminderMinutes}"></div>
         <button>Save</button>
-      </form>`;
+      </form>
+      <h2>Saved places</h2>
+      ${state.places.length
+        ? state.places.map((p) => `<div class="card row"><span class="grow">📍 <b>${esc(p.name)}</b>
+            <span class="muted small">${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</span></span>
+            <a class="btn light small" href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener">View</a>
+            <button class="small stop" data-act="del-place" data-id="${esc(p.id)}">Delete</button></div>`).join('')
+        : '<p class="muted">None yet. When you drop a pin on a new job, tick "Save this spot" to add it here. Saved places show up as one-tap buttons for pickup and drop-off.</p>'}`;
     $('#setForm').onsubmit = (e) => {
       e.preventDefault();
       act(() => api('settings', { method: 'PUT', body: { offerMinutes: $('#sOffer').value, urgentOfferMinutes: $('#sUrgent').value, reminderMinutes: $('#sRem').value } }), 'Saved');
@@ -436,6 +624,7 @@
         if (pin) act(() => api(`users/${id}`, { method: 'PATCH', body: { pin } }), 'PIN changed');
         break;
       }
+      case 'del-place': if (confirm('Delete this saved place?')) act(() => api(`places/${id}`, { method: 'DELETE' }), 'Deleted'); break;
       case 'role': act(() => api(`users/${id}`, { method: 'PATCH', body: { role: b.dataset.role } }), 'Updated'); break;
       case 'remove': if (confirm('Remove this person?')) act(async () => { await api(`users/${id}`, { method: 'DELETE' }); boot = null; }, 'Removed'); break;
     }

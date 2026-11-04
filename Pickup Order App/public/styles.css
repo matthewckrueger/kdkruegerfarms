@@ -65,10 +65,11 @@ button, .btn {
 }
 button:disabled { opacity: .5; }
 button.ghost { background: transparent; color: inherit; border: 1px solid currentColor; }
-button.small { padding: 6px 10px; min-height: 34px; font-size: 14px; }
+button.small, .btn.small { padding: 6px 10px; min-height: 34px; font-size: 14px; }
 button.go { background: var(--go); color: #fff; }
 button.stop { background: var(--stop); color: #fff; }
-button.light { background: var(--line); color: var(--ink); }
+button.light, .btn.light { background: var(--line); color: var(--ink); }
+a.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
 button.big { width: 100%; font-size: 20px; padding: 18px; }
 .top button.ghost { color: var(--green-ink); }
 
@@ -129,3 +130,12 @@ details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-
   transition: transform .25s; z-index: 10;
 }
 #toast.show { transform: translateX(-50%) translateY(0); }
+
+/* Map pin picker */
+.map { height: 320px; border-radius: 10px; border: 1px solid var(--line); z-index: 0; }
+.results { display: grid; gap: 6px; }
+.results button { text-align: left; background: var(--card); color: var(--ink); border: 1px solid var(--line); font-weight: 500; padding: 8px 10px; min-height: 0; }
+.results small { display: block; color: var(--muted); font-weight: 400; }
+.pinned { color: var(--go); font-weight: 600; }
+.stop-row { margin-top: 6px; }
+.stop-row + .stop-row { padding-top: 6px; border-top: 1px dashed var(--line); }

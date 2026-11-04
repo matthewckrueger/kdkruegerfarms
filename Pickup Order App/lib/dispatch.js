@@ -31,12 +31,33 @@ function dueText(job) {
   });
 }
 
-function createJob({ title, details, location, dueBy, priority }, createdBy) {
+// Returns { lat, lng } for a valid map pin, or nulls.
+function cleanPin(lat, lng) {
+  if (lat == null || lng == null || lat === '' || lng === '') return { lat: null, lng: null };
+  const a = Number(lat);
+  const b = Number(lng);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a) > 90 || Math.abs(b) > 180) return { lat: null, lng: null };
+  return { lat: Math.round(a * 1e6) / 1e6, lng: Math.round(b * 1e6) / 1e6 };
+}
+
+// "NAPA → Shop" style summary for notifications.
+function routeText(job) {
+  if (job.location && job.dropoff) return `${job.location} → ${job.dropoff}`;
+  if (job.location) return job.location;
+  return job.dropoff ? `Drop off: ${job.dropoff}` : '';
+}
+
+function createJob({ title, details, location, lat, lng, dropoff, dropLat, dropLng, dueBy, priority }, createdBy) {
+  const drop = cleanPin(dropLat, dropLng);
   const job = {
     id: store.id(),
     title: String(title || '').trim().slice(0, 120),
     details: String(details || '').trim().slice(0, 2000),
     location: String(location || '').trim().slice(0, 300),
+    ...cleanPin(lat, lng),
+    dropoff: String(dropoff || '').trim().slice(0, 300),
+    dropLat: drop.lat,
+    dropLng: drop.lng,
     dueBy: dueBy ? iso(dueBy) : null,
     priority: priority === 'urgent' ? 'urgent' : 'normal',
     status: 'offering',
@@ -81,7 +102,7 @@ function offerNext(job) {
   notify([next.id], {
     kind: 'offer',
     title: (job.priority === 'urgent' ? 'URGENT job: ' : 'New job: ') + job.title,
-    body: [job.location, job.details].filter(Boolean).join(' - ').slice(0, 140) + dueText(job) +
+    body: [routeText(job), job.details].filter(Boolean).join(' - ').slice(0, 140) + dueText(job) +
       ` · Answer within ${minutes} min`,
     jobId: job.id,
     offerToken: job.offer.token,
@@ -147,7 +168,7 @@ function broadcast(job, byUserId) {
     notify([d.id], {
       kind: 'offer',
       title: 'Anyone? ' + job.title,
-      body: [job.location, job.details].filter(Boolean).join(' - ').slice(0, 140) + dueText(job),
+      body: [routeText(job), job.details].filter(Boolean).join(' - ').slice(0, 140) + dueText(job),
       jobId: job.id,
       offerToken: job.broadcastTokens[d.id],
       urgent: true,
@@ -260,4 +281,4 @@ function tick() {
   if (changed) store.save();
 }
 
-module.exports = { configure, createJob, respond, broadcast, restart, wake, release, setProgress, cancel, tick };
+module.exports = { cleanPin, configure, createJob, respond, broadcast, restart, wake, release, setProgress, cancel, tick };
