@@ -91,24 +91,6 @@ input[type=checkbox] { width: auto; }
 .tabs button { flex: 1; background: transparent; color: var(--ink); padding: 8px 4px; min-height: 38px; font-size: 15px; }
 .tabs button.on { background: var(--card); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 
-.duty {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 18px; border-radius: var(--radius); background: var(--card); border: 2px solid var(--line);
-}
-.duty.on { border-color: var(--go); }
-.duty strong { font-size: 20px; display: block; }
-.switch { position: relative; width: 74px; height: 42px; flex: none; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.switch span {
-  position: absolute; inset: 0; border-radius: 99px; background: #b9b9b0; transition: .2s;
-}
-.switch span::after {
-  content: ""; position: absolute; left: 4px; top: 4px; width: 34px; height: 34px;
-  border-radius: 50%; background: #fff; transition: .2s;
-}
-.switch input:checked + span { background: var(--go); }
-.switch input:checked + span::after { transform: translateX(32px); }
-
 .offer {
   border: 3px solid var(--amber); background: var(--amber-soft);
   animation: pulse 1.6s ease-in-out infinite;
@@ -139,8 +121,6 @@ details summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-
 .banner.warn { background: var(--amber-soft); }
 
 .person { display: flex; align-items: center; gap: 10px; }
-.dot { width: 10px; height: 10px; border-radius: 50%; background: #b9b9b0; flex: none; }
-.dot.on { background: var(--go); }
 .num { width: 26px; height: 26px; border-radius: 50%; background: var(--line); display: grid; place-items: center; font-size: 13px; font-weight: 700; flex: none; }
 
 #toast {

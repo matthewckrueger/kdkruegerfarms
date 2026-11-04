@@ -14,14 +14,15 @@ someone says **"I'll take it."**
    - **I'll take it**: the job is theirs, and the dispatcher gets a "Jake took it" alert.
    - **Can't**, or no answer in time: the job rolls to driver #2, then #3, and so on.
 3. **If nobody takes it**, the dispatcher is alerted and can tap **📣 Send to everyone**.
-   This pings every driver at once, including drivers who are off duty, and the first one to say yes gets it.
+   This pings every driver at once, and the first one to say yes gets it.
 4. **The driver taps "Picked up" and then "Done".** The dispatcher is notified at each step.
    If something comes up, the driver can tap **Can't do it after all** and the job goes to the next driver.
 5. **Due-time alerts.** The driver gets a reminder 30 minutes before the job is due. If the job isn't done by
    the due time, everyone involved gets an **Overdue** alert.
 
-Drivers flip an **"I'm available"** switch, which works like going online in Uber. Only drivers who are available
-get pinged in the normal rotation. If a driver comes on duty while a job is sitting
+Every driver on the **Team** list is always in the rotation. There's no on/off switch.
+To stop someone getting pinged, remove them from the Team list. A driver who can't go
+just taps **Can't** and the job moves to the next person. If you add a new driver while a job is sitting
 unclaimed, they get pinged for it right away.
 
 The **Team** tab sets the ping order: use the ▲▼ arrows to choose who gets asked first.
@@ -75,7 +76,18 @@ Push notifications only work over **HTTPS**. The server also has to run
 **all the time**, because it handles the "no answer → next driver" timers. Pick an
 always-on host, not a free tier that goes to sleep.
 
-**Recommended: Railway or Render (about $5–7/month)**
+| Option | Cost | Notes |
+|---|---|---|
+| **Railway** | ~$5/mo | Easiest. Connect GitHub and it deploys. Add a volume for the data. |
+| **Render (Starter + disk)** | ~$7–8/mo | Also easy. **Avoid the free tier**: it sleeps when idle and has no disk, so timers and data break. |
+| **Fly.io** | ~$2–5/mo | Small VM + volume, pay as you go. A bit more technical. |
+| **Farm computer + Cloudflare Tunnel** | $0 (or ~$60–100 one-time for a Raspberry Pi) | Runs on an always-on PC or Pi at the farm. The tunnel gives free HTTPS with no router changes. Goes down if farm power or internet does. |
+| **Google Cloud e2-micro / Oracle Cloud Always Free** | $0 | Free small servers, but more setup (Linux, HTTPS). Google's free tier only covers certain US regions. |
+| Vercel / Netlify / Firebase / Supabase free tiers | $0 | **Not a fit as-is.** They don't keep a server running for the timers. Would need a rewrite. |
+
+Prices are approximate. Check current pricing before signing up.
+
+**Recommended: Railway or Render (about $5–8/month)**
 1. Create a new service from this GitHub repo, with the root directory set to `Pickup Order App`.
 2. Build command: `npm install`. Start command: `npm start`.
 3. Add a **persistent disk/volume** mounted at `/data`, and set these environment variables:

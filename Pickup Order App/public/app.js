@@ -217,17 +217,12 @@
     const done = state.jobs.filter((j) => j.assignedTo === me.id && j.status === 'done').slice(0, 5);
     app.innerHTML = `
       ${pushBanner()}
-      <label class="duty ${me.onDuty ? 'on' : ''}">
-        <div><strong>${me.onDuty ? "I'm available" : "I'm off"}</strong>
-          <span class="muted small">${me.onDuty ? 'You will get pinged for new jobs.' : 'Flip on to get pinged for jobs.'}</span></div>
-        <span class="switch"><input type="checkbox" id="duty" ${me.onDuty ? 'checked' : ''} aria-label="Available for jobs"><span></span></span>
-      </label>
+      <p class="muted small">Hi ${esc(me.name)} — you'll get pinged when a job comes in. Tap <b>Can't</b> any time and it goes to the next person.</p>
       ${offers.length ? `<h2>New job${offers.length > 1 ? 's' : ''} for you</h2>` : ''}
       ${offers.map(offerCard).join('')}
       <h2>My jobs</h2>
       ${mine.length ? mine.map(myJobCard).join('') : `<p class="muted">No jobs right now.</p>`}
       ${done.length ? `<h2>Recently done</h2>${done.map((j) => `<div class="card"><div class="row"><span class="grow">${esc(j.title)}</span><span class="pill done">Done</span></div></div>`).join('')}` : ''}`;
-    $('#duty').onchange = (e) => act(() => api('me/duty', { body: { onDuty: e.target.checked } }));
   }
   function jobInfo(j) {
     return `
@@ -275,9 +270,8 @@
     const open = state.jobs.filter((j) => !['done', 'canceled'].includes(j.status));
     const closed = state.jobs.filter((j) => ['done', 'canceled'].includes(j.status));
     const drivers = state.users.filter((u) => u.role === 'driver');
-    const onDuty = drivers.filter((u) => u.onDuty).length;
     $('#pane').innerHTML = `
-      <div class="row muted small" style="margin-bottom:8px"><span class="grow">${onDuty} of ${drivers.length} drivers available</span>
+      <div class="row muted small" style="margin-bottom:8px"><span class="grow">${drivers.length} driver${drivers.length === 1 ? '' : 's'} on the team</span>
         <button class="small" data-tab-go="new">+ New job</button></div>
       ${open.length ? open.map(boardCard).join('') : `<div class="card center muted">No open jobs. Tap <b>+ New job</b> to send one out.</div>`}
       ${closed.length ? `<h2>Finished</h2>${closed.map(boardCard).join('')}` : ''}`;
@@ -330,7 +324,7 @@
           <textarea id="jDetails" maxlength="2000" placeholder="Part number, who to ask for, it's paid for, etc."></textarea></div>
         <label class="row" style="font-weight:600"><input type="checkbox" id="jUrgent"> 🔴 Urgent (shorter time to answer: ${state.settings.urgentOfferMinutes} min)</label>
         <button class="big">Send it out 🔔</button>
-        <p class="muted small" style="margin:0">Goes to available drivers one at a time, in your Team order. Each has ${state.settings.offerMinutes} min to answer.</p>
+        <p class="muted small" style="margin:0">Goes to drivers one at a time, in your Team order. Each has ${state.settings.offerMinutes} min to answer.</p>
       </form>`;
     $$('[data-q]').forEach((b) => {
       b.onclick = () => {
@@ -361,9 +355,8 @@
     const person = (u, i, list) => `<div class="card">
       <div class="person">
         ${u.role === 'driver' ? `<span class="num" title="Ping order">${i + 1}</span>` : ''}
-        <span class="dot ${u.onDuty ? 'on' : ''}" title="${u.onDuty ? 'Available' : 'Off'}"></span>
         <div class="grow" style="flex:1;min-width:0"><b>${esc(u.name)}</b>${u.id === state.me.id ? ' (you)' : ''}
-          <div class="meta">${u.role === 'driver' ? (u.onDuty ? 'Available' : 'Off') + ' · ' : ''}${u.devices ? '🔔 notifications on' : '🔕 no notifications yet'}${u.phone ? ' · ' + esc(u.phone) : ''}</div></div>
+          <div class="meta">${u.devices ? '🔔 notifications on' : '🔕 no notifications yet'}${u.phone ? ' · ' + esc(u.phone) : ''}</div></div>
         ${u.role === 'driver' ? `
           <button class="small light" data-move="-1" data-id="${esc(u.id)}" ${i === 0 ? 'disabled' : ''} aria-label="Move up">▲</button>
           <button class="small light" data-move="1" data-id="${esc(u.id)}" ${i === list.length - 1 ? 'disabled' : ''} aria-label="Move down">▼</button>` : ''}
@@ -455,7 +448,7 @@
   // ---------- Refresh loop ----------
   function isTyping() {
     const a = document.activeElement;
-    return a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName) && a.id !== 'duty';
+    return a && ['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName);
   }
   async function refresh(force) {
     if (!token) return;

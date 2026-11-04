@@ -52,7 +52,7 @@ app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
 
 const publicUser = (u, full) => ({
-  id: u.id, name: u.name, role: u.role, onDuty: !!u.onDuty, order: u.order,
+  id: u.id, name: u.name, role: u.role, order: u.order,
   ...(full ? { phone: u.phone || '', devices: (u.subscriptions || []).length } : {}),
 });
 
@@ -112,7 +112,7 @@ app.post('/api/setup', h((req) => {
   const { name, pin } = req.body;
   if (!name || !/^\d{4,8}$/.test(String(pin))) throw new Error('Enter a name and a 4-8 digit PIN.');
   const u = { id: store.id(), name: String(name).trim(), role: 'dispatcher', pin: store.hashPin(pin),
-    order: 1, onDuty: false, sessions: [], subscriptions: [] };
+    order: 1, sessions: [], subscriptions: [] };
   const token = store.token();
   u.sessions.push(token);
   db.users.push(u);
@@ -181,22 +181,6 @@ app.get('/api/state', h((req) => {
   };
 }));
 
-app.post('/api/me/duty', h((req) => {
-  const me = req.user;
-  me.onDuty = !!req.body.onDuty;
-  store.save();
-  for (const job of db.jobs) {
-    // Going off duty while holding an offer = pass.
-    if (!me.onDuty && job.status === 'offering' && job.offer?.driverId === me.id) {
-      dispatch.respond(job, { driverId: me.id, answer: 'decline' });
-    }
-    // Coming on duty picks up anything nobody else could take.
-    if (me.onDuty && me.role === 'driver' && job.status === 'unclaimed' && !job.tried.includes(me.id)) {
-      dispatch.wake(job);
-    }
-  }
-}));
-
 app.post('/api/me/subscribe', h((req) => {
   const sub = req.body.subscription;
   if (!sub || !sub.endpoint) throw new Error('Bad subscription.');
@@ -232,10 +216,12 @@ app.post('/api/users', dispatcherOnly, h((req) => {
   if (!String(name || '').trim()) throw new Error('Name is required.');
   if (!/^\d{4,8}$/.test(String(pin))) throw new Error('PIN must be 4-8 digits.');
   const u = { id: store.id(), name: String(name).trim(), role: role === 'dispatcher' ? 'dispatcher' : 'driver',
-    phone: String(phone || ''), pin: store.hashPin(pin), order: nextOrder(), onDuty: false,
+    phone: String(phone || ''), pin: store.hashPin(pin), order: nextOrder(),
     sessions: [], subscriptions: [] };
   db.users.push(u);
   store.save();
+  // A new driver gets a shot at anything nobody else took.
+  if (u.role === 'driver') db.jobs.filter((j) => j.status === 'unclaimed').forEach((j) => dispatch.wake(j));
   return { id: u.id };
 }));
 
@@ -249,7 +235,9 @@ app.patch('/api/users/:id', dispatcherOnly, h((req) => {
     if (u.role === 'dispatcher' && role !== 'dispatcher' && db.users.filter((x) => x.role === 'dispatcher').length < 2) {
       throw new Error('You need at least one dispatcher.');
     }
+    const becameDriver = u.role !== 'driver' && role === 'driver';
     u.role = role;
+    if (becameDriver) db.jobs.filter((j) => j.status === 'unclaimed').forEach((j) => dispatch.wake(j));
   }
   if (pin) {
     if (!/^\d{4,8}$/.test(String(pin))) throw new Error('PIN must be 4-8 digits.');

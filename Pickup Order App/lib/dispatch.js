@@ -1,5 +1,6 @@
 // The "Uber-style" part: offer a job to one driver at a time, in priority
 // order. If they say no (or don't answer in time) it rolls to the next one.
+// Every driver on the Team list is always in the rotation.
 // If nobody takes it, the dispatchers are told and can blast it to everyone.
 const store = require('./store');
 
@@ -58,11 +59,11 @@ function createJob({ title, details, location, dueBy, priority }, createdBy) {
 }
 
 function offerNext(job) {
-  const next = drivers().find((d) => d.onDuty && !job.tried.includes(d.id));
+  const next = drivers().find((d) => !job.tried.includes(d.id));
   if (!next) {
     job.status = 'unclaimed';
     job.offer = null;
-    log(job, 'unclaimed', null, 'Every available driver passed');
+    log(job, 'unclaimed', null, 'Every driver passed');
     notify(dispatcherIds(), {
       kind: 'unclaimed',
       title: 'Nobody took the job',
@@ -134,7 +135,7 @@ function respond(job, { driverId, offerToken, answer }) {
   return job;
 }
 
-// Send to every driver at once (on duty or not). First "yes" wins.
+// Send to every driver at once. First "yes" wins.
 function broadcast(job, byUserId) {
   if (!['unclaimed', 'offering'].includes(job.status)) throw new Error('Job is not open.');
   job.status = 'broadcast';
@@ -157,7 +158,7 @@ function broadcast(job, byUserId) {
   return job;
 }
 
-// Start the line over from the top driver (e.g. after people come on duty).
+// Start the line over from the top driver.
 function restart(job, byUserId) {
   if (!['unclaimed', 'broadcast', 'offering'].includes(job.status)) throw new Error('Job is not open.');
   job.tried = [];
@@ -168,7 +169,7 @@ function restart(job, byUserId) {
   return job;
 }
 
-// A driver just came on duty: give them a shot at anything nobody took.
+// A new driver joined the team: give them a shot at anything nobody took.
 function wake(job) {
   if (job.status !== 'unclaimed') return job;
   offerNext(job);

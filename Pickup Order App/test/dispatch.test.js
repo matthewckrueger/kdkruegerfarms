@@ -17,12 +17,12 @@ function setup() {
   store.reset();
   const db = store.load();
   sent = [];
-  const mk = (id, role, order, onDuty = true) =>
-    db.users.push({ id, name: id, role, order, onDuty, pin: store.hashPin('1234'), sessions: [], subscriptions: [] });
-  mk('boss', 'dispatcher', 0, false);
+  const mk = (id, role, order) =>
+    db.users.push({ id, name: id, role, order, pin: store.hashPin('1234'), sessions: [], subscriptions: [] });
+  mk('boss', 'dispatcher', 0);
   mk('amy', 'driver', 1);
   mk('bob', 'driver', 2);
-  mk('cal', 'driver', 3, false); // off duty
+  mk('cal', 'driver', 3);
   return db;
 }
 
@@ -37,7 +37,10 @@ test('offers to the first available driver, then rolls on decline', () => {
   assert.equal(job.offer.driverId, 'bob');
 
   dispatch.respond(job, { driverId: 'bob', answer: 'decline' });
-  assert.equal(job.status, 'unclaimed'); // cal is off duty, so skipped
+  assert.equal(job.offer.driverId, 'cal');
+
+  dispatch.respond(job, { driverId: 'cal', answer: 'decline' });
+  assert.equal(job.status, 'unclaimed');
   assert.deepEqual(sent.at(-1).ids, ['boss']);
 });
 
@@ -64,7 +67,7 @@ test('broadcast: first yes wins, others are told', () => {
   const job = dispatch.createJob({ title: 'Tires' }, 'boss');
   dispatch.broadcast(job, 'boss');
   assert.equal(job.status, 'broadcast');
-  assert.equal(Object.keys(job.broadcastTokens).length, 3); // includes off-duty cal
+  assert.equal(Object.keys(job.broadcastTokens).length, 3);
   dispatch.respond(job, { offerToken: job.broadcastTokens.cal, answer: 'accept' });
   assert.equal(job.assignedTo, 'cal');
   assert.equal(sent.at(-1).kind, 'taken');
