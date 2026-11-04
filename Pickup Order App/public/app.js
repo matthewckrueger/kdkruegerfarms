@@ -1,4 +1,4 @@
-// KDK Pickups - phone app (plain JavaScript, no build step).
+// KDKF Pickups - phone app (plain JavaScript, no build step).
 (() => {
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];

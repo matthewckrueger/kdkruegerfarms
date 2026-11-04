@@ -5,7 +5,7 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('push', (event) => {
   let data = {};
-  try { data = event.data.json(); } catch { data = { title: 'KDK Pickups', body: event.data?.text() }; }
+  try { data = event.data.json(); } catch { data = { title: 'KDKF Pickups', body: event.data?.text() }; }
   const isOffer = data.kind === 'offer';
   const options = {
     body: data.body || '',
@@ -23,7 +23,7 @@ self.addEventListener('push', (event) => {
     ] : [],
   };
   event.waitUntil((async () => {
-    await self.registration.showNotification(data.title || 'KDK Pickups', options);
+    await self.registration.showNotification(data.title || 'KDKF Pickups', options);
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     wins.forEach((w) => w.postMessage({ type: 'push', data }));
   })());

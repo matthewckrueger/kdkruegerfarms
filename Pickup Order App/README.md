@@ -1,4 +1,4 @@
-# Pickup Order App (KDK Pickups)
+# Pickup Order App (KDKF Pickups)
 
 An Uber-style "ding ding" app for farm pickups and errands. A dispatcher posts a
 job, and the app pings drivers **one at a time, in priority order**, until
