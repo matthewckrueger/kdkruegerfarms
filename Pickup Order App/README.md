@@ -87,7 +87,9 @@ always-on host, not a free tier that goes to sleep.
 
 Prices are approximate. Check current pricing before signing up.
 
-**Recommended: Railway or Render (about $5–8/month)**
+**We're using Railway.** Follow the click-by-click guide in [RAILWAY_SETUP.md](RAILWAY_SETUP.md).
+
+**General steps for other hosts:**
 1. Create a new service from this GitHub repo, with the root directory set to `Pickup Order App`.
 2. Build command: `npm install`. Start command: `npm start`.
 3. Add a **persistent disk/volume** mounted at `/data`, and set these environment variables:

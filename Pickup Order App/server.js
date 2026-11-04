@@ -48,6 +48,9 @@ setInterval(() => {
 
 // ---- Helpers ------------------------------------------------------------
 const app = express();
+// Behind Railway's (or any) proxy: use the real visitor IP for the login throttle.
+app.set('trust proxy', 1);
+app.get('/healthz', (req, res) => res.send('ok'));
 app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
 
@@ -280,4 +283,9 @@ app.put('/api/settings', dispatcherOnly, h((req) => {
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
-app.listen(PORT, () => console.log(`Pickup Order App running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Pickup Order App running on port ${PORT}, saving data in ${store.DATA_DIR}`);
+  if (process.env.RAILWAY_ENVIRONMENT && !process.env.RAILWAY_VOLUME_MOUNT_PATH && !process.env.DATA_DIR) {
+    console.warn('WARNING: no Railway volume attached - jobs and users will be wiped on every deploy!');
+  }
+});
