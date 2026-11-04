@@ -16,6 +16,7 @@ const DEFAULTS = {
     offerMinutes: 3, // how long a driver has to answer a normal job
     urgentOfferMinutes: 1, // ...and an urgent one
     reminderMinutes: 30, // remind the driver this long before "due by"
+    repeatPingMinutes: 1, // re-ping the driver this often until they answer (0 = once)
   },
   vapid: null,
 };

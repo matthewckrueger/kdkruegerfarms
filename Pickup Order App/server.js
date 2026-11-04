@@ -292,8 +292,9 @@ app.delete('/api/places/:id', dispatcherOnly, h((req) => {
 }));
 
 const { coordsFromUrl, SHORT_LINK } = require('./lib/maps');
+const geocode = require('./lib/geocode');
 
-// Address search (OpenStreetMap), or a pasted Google/Apple Maps link.
+// Address search, or a pasted Google/Apple Maps link.
 app.get('/api/geocode', dispatcherOnly, async (req, res) => {
   try {
     const q = String(req.query.q || '').trim().slice(0, 500);
@@ -313,22 +314,11 @@ app.get('/api/geocode', dispatcherOnly, async (req, res) => {
       if (!pin || pin.lat == null) throw new Error("Couldn't read a location from that link. Try searching the address instead.");
       return res.json([{ name: 'Pin from link', address: `${pin.lat}, ${pin.lng}`, ...pin }]);
     }
-    const u = new URL('https://nominatim.openstreetmap.org/search');
-    u.searchParams.set('format', 'jsonv2');
-    u.searchParams.set('q', q);
-    u.searchParams.set('limit', '6');
-    u.searchParams.set('countrycodes', 'us');
-    if (/^[-\d.,]+$/.test(String(req.query.viewbox || ''))) u.searchParams.set('viewbox', req.query.viewbox);
-    const r = await fetch(u, {
-      headers: { 'User-Agent': `KDKF-Pickups/1.0 (${process.env.CONTACT_EMAIL || 'farm dispatch app'})`, 'Accept-Language': 'en' },
-    });
-    if (!r.ok) throw new Error('Map search is busy. Try again in a moment.');
-    const out = await r.json();
-    res.json(out.map((x) => ({
-      name: x.name || String(x.display_name).split(',')[0],
-      address: x.display_name,
-      ...dispatch.cleanPin(x.lat, x.lon),
-    })));
+    // Center of the map the dispatcher is looking at, so nearby results come first.
+    let center = null;
+    const vb = String(req.query.viewbox || '').split(',').map(Number);
+    if (vb.length === 4 && vb.every(Number.isFinite)) center = { lat: (vb[1] + vb[3]) / 2, lng: (vb[0] + vb[2]) / 2 };
+    res.json(await geocode.search(q, center));
   } catch (e) {
     res.status(400).json({ error: e.message || 'Search failed.' });
   }
@@ -336,9 +326,10 @@ app.get('/api/geocode', dispatcherOnly, async (req, res) => {
 
 app.put('/api/settings', dispatcherOnly, h((req) => {
   const s = db.settings;
-  for (const k of ['offerMinutes', 'urgentOfferMinutes', 'reminderMinutes']) {
+  for (const k of ['offerMinutes', 'urgentOfferMinutes', 'reminderMinutes', 'repeatPingMinutes']) {
     const v = Number(req.body[k]);
-    if (Number.isFinite(v) && v >= 0.5 && v <= 240) s[k] = v;
+    if (k === 'repeatPingMinutes' && v === 0) s[k] = 0; // 0 = only ping once
+    else if (Number.isFinite(v) && v >= 0.5 && v <= 240) s[k] = v;
   }
   store.save();
   return s;

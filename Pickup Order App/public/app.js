@@ -394,7 +394,7 @@
         <button type="button" class="small light" id="${k}Clear" hidden>Remove pin</button>
         <button type="button" class="small" id="${k}Toggle">📍 Drop a pin</button></div>
       <div id="${k}Panel" class="stack" style="margin-top:8px" hidden>
-        <div class="row"><input id="${k}Search" style="flex:1;min-width:0" placeholder="Address, business, or paste a Google Maps link" enterkeyhint="search">
+        <div class="row"><input id="${k}Search" style="flex:1;min-width:0" placeholder="Search Google: address or business (or paste a Maps link)" enterkeyhint="search">
           <button type="button" class="small" id="${k}SearchBtn">Search</button></div>
         <div id="${k}Results" class="results"></div>
         <div id="${k}Map" class="map"></div>
@@ -492,7 +492,7 @@
         const b = map.getBounds();
         const viewbox = [b.getWest(), b.getNorth(), b.getEast(), b.getSouth()].map((n) => n.toFixed(4)).join(',');
         const results = (await api(`geocode?q=${encodeURIComponent(q)}&viewbox=${viewbox}`)).filter((r) => r.lat != null);
-        if (!results.length) { box.innerHTML = '<span class="muted small">Nothing found. Try a nearby town or road, then tap the map.</span>'; return; }
+        if (!results.length) { box.innerHTML = '<span class="muted small">Google found nothing. Try adding the town, or just tap the map to drop the pin.</span>'; return; }
         box.innerHTML = results.map((r, i) => `<button type="button" data-r="${i}">${esc(r.name)}<small>${esc(r.address)}</small></button>`).join('');
         $$('[data-r]', box).forEach((btn) => {
           btn.onclick = () => {
@@ -585,6 +585,7 @@
       <form class="card stack" id="setForm">
         <div><label for="sOffer">Minutes a driver has to answer a job</label><input id="sOffer" type="number" min="0.5" max="240" step="0.5" value="${s.offerMinutes}"></div>
         <div><label for="sUrgent">…for an urgent job</label><input id="sUrgent" type="number" min="0.5" max="240" step="0.5" value="${s.urgentOfferMinutes}"></div>
+        <div><label for="sRepeat">Re-ping the driver every … minutes until they answer <span class="muted">(0 = just once)</span></label><input id="sRepeat" type="number" min="0" max="60" step="0.5" value="${s.repeatPingMinutes ?? 1}"></div>
         <div><label for="sRem">Remind the driver this many minutes before it's due</label><input id="sRem" type="number" min="1" max="240" value="${s.reminderMinutes}"></div>
         <button>Save</button>
       </form>
@@ -597,7 +598,7 @@
         : '<p class="muted">None yet. When you drop a pin on a new job, tick "Save this spot" to add it here. Saved places show up as one-tap buttons for pickup and drop-off.</p>'}`;
     $('#setForm').onsubmit = (e) => {
       e.preventDefault();
-      act(() => api('settings', { method: 'PUT', body: { offerMinutes: $('#sOffer').value, urgentOfferMinutes: $('#sUrgent').value, reminderMinutes: $('#sRem').value } }), 'Saved');
+      act(() => api('settings', { method: 'PUT', body: { offerMinutes: $('#sOffer').value, urgentOfferMinutes: $('#sUrgent').value, reminderMinutes: $('#sRem').value, repeatPingMinutes: $('#sRepeat').value } }), 'Saved');
     };
   }
 

@@ -97,18 +97,37 @@ function offerNext(job) {
   const s = db().settings;
   const minutes = job.priority === 'urgent' ? s.urgentOfferMinutes : s.offerMinutes;
   job.status = 'offering';
-  job.offer = { driverId: next.id, token: store.token(), expiresAt: iso(now() + minutes * 60000) };
+  job.offer = { driverId: next.id, token: store.token(), expiresAt: iso(now() + minutes * 60000), pings: 0 };
   log(job, 'offered', next.id);
-  notify([next.id], {
+  pingOffer(job);
+}
+
+// Send (or re-send) the offer notification to whoever holds it right now.
+function pingOffer(job) {
+  const o = job.offer;
+  o.pings = (o.pings || 0) + 1;
+  o.lastPingAt = iso(now());
+  const left = Math.max(0, Math.ceil((Date.parse(o.expiresAt) - now()) / 60000));
+  const lead = o.pings > 1 ? 'Still waiting: ' : (job.priority === 'urgent' ? 'URGENT job: ' : 'New job: ');
+  notify([o.driverId], {
     kind: 'offer',
-    title: (job.priority === 'urgent' ? 'URGENT job: ' : 'New job: ') + job.title,
+    title: lead + job.title,
     body: [routeText(job), job.details].filter(Boolean).join(' - ').slice(0, 140) + dueText(job) +
-      ` · Answer within ${minutes} min`,
+      ` · Answer within ${left || 1} min`,
     jobId: job.id,
-    offerToken: job.offer.token,
+    offerToken: o.token,
     urgent: job.priority === 'urgent',
     tag: 'job-' + job.id,
   });
+}
+
+// How often to re-ping. Short answer windows still get at least one re-ping.
+function repeatEveryMs(job) {
+  const s = db().settings;
+  const every = Number(s.repeatPingMinutes ?? 1);
+  if (!every) return 0;
+  const window = (job.priority === 'urgent' ? s.urgentOfferMinutes : s.offerMinutes) * 60000;
+  return Math.min(every * 60000, window / 2);
 }
 
 // Driver accepts or declines. Either their session (driverId) or the
@@ -260,6 +279,14 @@ function tick() {
       job.tried.push(job.offer.driverId);
       offerNext(job);
       changed = true;
+    } else if (job.status === 'offering' && job.offer) {
+      const every = repeatEveryMs(job);
+      const last = Date.parse(job.offer.lastPingAt || 0);
+      // Re-ping, but not in the final 15 seconds (it's about to move on anyway).
+      if (every && t - last >= every && Date.parse(job.offer.expiresAt) - t > 15000) {
+        pingOffer(job);
+        changed = true;
+      }
     }
     if (!job.dueBy) continue;
     const due = Date.parse(job.dueBy);

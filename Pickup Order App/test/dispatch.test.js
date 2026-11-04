@@ -109,3 +109,27 @@ test('map pins are kept on the job, bad ones dropped', () => {
   const none = dispatch.createJob({ title: 'Y', lat: null, lng: null }, 'boss');
   assert.equal(none.lat, null);
 });
+
+test('re-pings the driver every minute until they answer', () => {
+  setup();
+  const job = dispatch.createJob({ title: 'Filters' }, 'boss');
+  const pings = () => sent.filter((x) => x.kind === 'offer' && x.ids[0] === 'amy').length;
+  assert.equal(pings(), 1);
+  clock += 30000; dispatch.tick();
+  assert.equal(pings(), 1); // not yet
+  clock += 31000; dispatch.tick();
+  assert.equal(pings(), 2);
+  assert.match(sent.at(-1).title, /^Still waiting/);
+  clock += 60000; dispatch.tick();
+  assert.equal(pings(), 3);
+  clock += 60000; dispatch.tick(); // 3 min up: moves to bob
+  assert.equal(job.offer.driverId, 'bob');
+  assert.equal(pings(), 3);
+});
+
+test('urgent 1-minute window still gets a second ping', () => {
+  setup();
+  dispatch.createJob({ title: 'Now', priority: 'urgent' }, 'boss');
+  clock += 31000; dispatch.tick();
+  assert.equal(sent.filter((x) => x.kind === 'offer').length, 2);
+});
