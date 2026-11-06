@@ -51,6 +51,14 @@ const app = express();
 // Behind Railway's (or any) proxy: use the real visitor IP for the login throttle.
 app.set('trust proxy', 1);
 app.get('/healthz', (req, res) => res.send('ok'));
+// Always use the secure (https) address. Railway tells us how the visitor connected.
+app.use((req, res, next) => {
+  if (req.get('x-forwarded-proto') === 'http') {
+    return res.redirect(301, 'https://' + req.get('host') + req.originalUrl);
+  }
+  if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
+  next();
+});
 app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
 // Map library, served from our own server instead of a CDN.
